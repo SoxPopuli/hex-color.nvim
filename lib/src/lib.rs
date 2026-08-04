@@ -45,6 +45,39 @@ fn parse_hex_string(s: &str) -> impl Iterator<Item = Result<u8, InvalidHexChar>>
     even.zip(odd).map(|(a, b)| hex_pair_to_int(a, b))
 }
 
+fn int_to_hex_char(x: u8) -> [char; 2] {
+    let hi = (x & 0xF0) / 16;
+    let lo = x & 0x0F;
+
+    fn hex(x: u8) -> Option<char> {
+        match x {
+            0 => Some('0'),
+            1 => Some('1'),
+            2 => Some('2'),
+            3 => Some('3'),
+            4 => Some('4'),
+            5 => Some('5'),
+            6 => Some('6'),
+            7 => Some('7'),
+            8 => Some('8'),
+            9 => Some('9'),
+            10 => Some('a'),
+            11 => Some('b'),
+            12 => Some('c'),
+            13 => Some('d'),
+            14 => Some('e'),
+            15 => Some('f'),
+
+            _ => None,
+        }
+    }
+
+    [
+        hex(hi).expect("hex char out of range"),
+        hex(lo).expect("hex char out of range"),
+    ]
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 struct HexColor {
     r: u8,
@@ -66,11 +99,117 @@ struct Hsv {
     val: f32,
 }
 
+fn hue_to_rgb_prime(hue: f32, chroma: f32) -> Rgb<f32> {
+    let hue_prime = hue / 60.0;
+
+    let c = chroma;
+    let x = c * (1.0 - (hue_prime % 2.0 - 1.0).abs());
+
+    match hue_prime.floor() as i32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x), // sector 5, hue in [300, 360)
+    }
+    .into()
+}
+
+#[derive(Debug, Default, PartialEq)]
+struct Rgb<T> {
+    r: T,
+    g: T,
+    b: T,
+}
+impl<T> From<(T, T, T)> for Rgb<T> {
+    fn from((r, g, b): (T, T, T)) -> Self {
+        Self { r, g, b }
+    }
+}
+impl<T> Rgb<T> {
+    pub fn new(r: T, g: T, b: T) -> Self {
+        Self { r, g, b }
+    }
+}
+impl Rgb<u8> {
+    pub fn new_from_prime(rgb: Rgb<f32>, m: f32) -> Self {
+        let to_u8 = |x: f32| ((x + m) * 255.0).round() as u8;
+
+        Self {
+            r: to_u8(rgb.r),
+            g: to_u8(rgb.g),
+            b: to_u8(rgb.b),
+        }
+    }
+
+    pub fn to_hex_string(&self) -> String {
+        let mut output = Vec::with_capacity(7);
+        output.push(b'#');
+
+        let mut add_chars = |hex| {
+            let [a, b] = int_to_hex_char(hex);
+            output.push(a as u8);
+            output.push(b as u8);
+        };
+
+        add_chars(self.r);
+        add_chars(self.g);
+        add_chars(self.b);
+
+        String::from_utf8(output).expect("output is valid utf-8")
+    }
+}
+
+fn hsl_to_rgb(hsl: &Hsl) -> Rgb<u8> {
+    // normalize values
+    let hue = hsl.hue.rem_euclid(360.0);
+    let sat = hsl.sat.clamp(0.0, 100.0) / 100.0;
+    let lum = hsl.lum.clamp(0.0, 100.0) / 100.0;
+
+    let c = (1.0 - (2.0 * lum - 1.0).abs()) * sat;
+
+    let rgb_prime = hue_to_rgb_prime(hue, c);
+
+    let m = lum - c / 2.0;
+
+    Rgb::new_from_prime(rgb_prime, m)
+}
+
+fn hsv_to_rgb(hsv: &Hsv) -> Rgb<u8> {
+    // normalize values
+    let hue = hsv.hue.rem_euclid(360.0);
+    let sat = hsv.sat.clamp(0.0, 100.0) / 100.0;
+    let val = hsv.val.clamp(0.0, 100.0) / 100.0;
+
+    let c = sat * val;
+
+    let rgb_prime = hue_to_rgb_prime(hue, c);
+
+    let m = val - c;
+
+    Rgb::new_from_prime(rgb_prime, m)
+}
+
 #[derive(Debug, PartialEq)]
 enum ParseOutput {
     HexColor(HexColor),
     Hsl(Hsl),
     Hsv(Hsv),
+}
+impl ParseOutput {
+    pub fn to_hex_string(&self) -> String {
+        match self {
+            ParseOutput::HexColor(hex) => Rgb {
+                r: hex.r,
+                g: hex.g,
+                b: hex.b,
+            }
+            .to_hex_string(),
+            ParseOutput::Hsl(hsl) => hsl_to_rgb(hsl).to_hex_string(),
+            ParseOutput::Hsv(hsv) => hsv_to_rgb(hsv).to_hex_string(),
+        }
+    }
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -298,6 +437,15 @@ mod tests {
         parse_hex_string(s).collect()
     }
 
+    #[test_case(0xFF => ['f', 'f'])]
+    #[test_case(0x00 => ['0', '0'])]
+    #[test_case(0xA0 => ['a', '0'])]
+    #[test_case(0x0A => ['0', 'a'])]
+    #[test_case(0xCE => ['c', 'e'])]
+    fn int_to_hex(x: u8) -> [char; 2] {
+        int_to_hex_char(x)
+    }
+
     #[test]
     fn regex_test() {
         let inputs = [
@@ -338,5 +486,37 @@ mod tests {
                 hsl(0.0, 100.0, 50.0),
             ]
         );
+    }
+
+    #[test]
+    fn hex_color_to_string() {
+        let hex = HexColor {
+            r: 255,
+            g: 0,
+            b: 127,
+        };
+        let hex_str = ParseOutput::HexColor(hex).to_hex_string();
+
+        assert_eq!(hex_str, "#ff007f");
+    }
+
+    #[test_case(270.0, 100.0, 100.0 => Rgb::new(255, 255, 255))]
+    #[test_case(270.0, 100.0, 50.0 => Rgb::new(128, 0, 255))]
+    #[test_case(180.0, 100.0, 50.0 => Rgb::new(0, 255, 255))]
+    #[test_case(180.0, 100.0, 0.0 => Rgb::new(0, 0, 0))]
+    #[test_case(180.0, 50.0, 50.0 => Rgb::new(64, 191, 191))]
+    fn hsl_to_string(hue: f32, sat: f32, lum: f32) -> Rgb<u8> {
+        let hsl = Hsl { hue, sat, lum };
+        hsl_to_rgb(&hsl)
+    }
+
+    #[test_case(270.0, 100.0, 100.0 => Rgb::new(128, 0, 255))]
+    #[test_case(270.0, 100.0, 50.0 => Rgb::new(64, 0, 128))]
+    #[test_case(180.0, 100.0, 50.0 => Rgb::new(0, 128, 128))]
+    #[test_case(180.0, 100.0, 0.0 => Rgb::new(0, 0, 0))]
+    #[test_case(180.0, 50.0, 50.0 => Rgb::new(64, 128, 128))]
+    fn hsv_to_string(hue: f32, sat: f32, val: f32) -> Rgb<u8> {
+        let hsv = Hsv { hue, sat, val };
+        hsv_to_rgb(&hsv)
     }
 }
