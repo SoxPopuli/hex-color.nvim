@@ -1,6 +1,6 @@
 use const_format::formatc;
-use regex_automata::{meta::Regex, util::captures::Captures};
-use std::sync::LazyLock;
+use regex_automata::{Span, meta::Regex, util::captures::Captures};
+use std::{range::Range, sync::LazyLock};
 use strum::{EnumCount, EnumIter, VariantArray};
 use thiserror::Error;
 
@@ -133,6 +133,19 @@ impl<T> Rgb<T> {
     }
 }
 impl Rgb<u8> {
+    #[rustfmt::skip]
+    const WHITE: Self = Self { r: 255, g: 255, b: 255 };
+    const BLACK: Self = Self { r: 0, g: 0, b: 0 };
+
+    pub fn get_foreground_color(&self) -> Self {
+        let grey = (self.r as f32 * 0.299) + (self.g as f32 * 0.587) + (self.b as f32 * 0.144);
+        if grey < 167.0 {
+            Self::WHITE
+        } else {
+            Self::BLACK
+        }
+    }
+
     pub fn new_from_prime(rgb: Rgb<f32>, m: f32) -> Self {
         let to_u8 = |x: f32| ((x + m) * 255.0).round() as u8;
 
@@ -143,9 +156,10 @@ impl Rgb<u8> {
         }
     }
 
+    /// Doesn't include the '#'
+    /// e.g. `0xFF00FF` -> `"ff00ff"`
     pub fn to_hex_string(&self) -> String {
-        let mut output = Vec::with_capacity(7);
-        output.push(b'#');
+        let mut output = Vec::with_capacity(6);
 
         let mut add_chars = |hex| {
             let [a, b] = int_to_hex_char(hex);
@@ -192,23 +206,61 @@ pub fn hsv_to_rgb(hsv: &Hsv) -> Rgb<u8> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum ParseOutput {
+pub enum ParseOutputContent {
     HexColor(HexColor),
     Hsl(Hsl),
     Hsv(Hsv),
 }
-impl ParseOutput {
-    pub fn to_hex_string(&self) -> String {
+impl ParseOutputContent {
+    pub fn to_rgb(&self) -> Rgb<u8> {
         match self {
-            ParseOutput::HexColor(hex) => Rgb {
+            Self::HexColor(hex) => Rgb {
                 r: hex.r,
                 g: hex.g,
                 b: hex.b,
-            }
-            .to_hex_string(),
-            ParseOutput::Hsl(hsl) => hsl_to_rgb(hsl).to_hex_string(),
-            ParseOutput::Hsv(hsv) => hsv_to_rgb(hsv).to_hex_string(),
+            },
+            Self::Hsl(hsl) => hsl_to_rgb(hsl),
+            Self::Hsv(hsv) => hsv_to_rgb(hsv),
         }
+    }
+
+    pub fn to_hex_string(&self) -> String {
+        self.to_rgb().to_hex_string()
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ParseOutput {
+    pub span: Range<usize>,
+    pub content: ParseOutputContent,
+}
+impl ParseOutput {
+    fn from_pattern_capture(input: &str, capture: &Captures) -> Result<Self, ParseError> {
+        let error = |kind| ParseError {
+            pattern: None,
+            kind,
+        };
+
+        let pattern_id = capture
+            .pattern()
+            .map(|p| p.as_usize())
+            .ok_or(error(ParseErrorKind::InvalidPatternId))?;
+
+        let pattern = Pattern::VARIANTS
+            .get(pattern_id)
+            .ok_or(error(ParseErrorKind::InvalidVariantId(pattern_id)))?;
+
+        let match_span = capture.get_group(0).ok_or(ParseError {
+            pattern: None,
+            kind: ParseErrorKind::MissingCaptureGroup(0),
+        })?;
+
+        let content = pattern.parse(input, capture)?;
+
+        Ok(Self {
+            span: match_span.range().into(),
+            content,
+        })
     }
 }
 
@@ -217,6 +269,11 @@ impl ParseOutput {
 pub struct ParseError {
     pattern: Option<Pattern>,
     kind: ParseErrorKind,
+}
+impl From<ParseError> for nvim_oxi::Error {
+    fn from(val: ParseError) -> Self {
+        nvim_oxi::Error::Lua(nvim_oxi::lua::Error::RuntimeError(val.to_string()))
+    }
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -288,33 +345,15 @@ impl Pattern {
         }
     }
 
-    fn parse(&self, input: &str, capture: &Captures) -> Result<ParseOutput, ParseError> {
+    fn parse(&self, input: &str, capture: &Captures) -> Result<ParseOutputContent, ParseError> {
         match self {
             Pattern::HexColor => parse_hex_color(input, capture),
             Pattern::Hslv => parse_hslv(input, capture),
         }
     }
-
-    pub fn parse_pattern_capture(input: &str, capture: &Captures) -> Result<ParseOutput, ParseError> {
-        let error = |kind| ParseError {
-            pattern: None,
-            kind,
-        };
-
-        let pattern_id = capture
-            .pattern()
-            .map(|p| p.as_usize())
-            .ok_or(error(ParseErrorKind::InvalidPatternId))?;
-
-        let pattern = Pattern::VARIANTS
-            .get(pattern_id)
-            .ok_or(error(ParseErrorKind::InvalidVariantId(pattern_id)))?;
-
-        pattern.parse(input, capture)
-    }
 }
 
-fn parse_hslv(input: &str, capture: &Captures) -> Result<ParseOutput, ParseError> {
+fn parse_hslv(input: &str, capture: &Captures) -> Result<ParseOutputContent, ParseError> {
     let get_input_by_name = |name| {
         let cap = capture.get_group_by_name(name);
 
@@ -367,12 +406,12 @@ fn parse_hslv(input: &str, capture: &Captures) -> Result<ParseOutput, ParseError
     };
 
     Ok(match kind {
-        ColorKind::Value => ParseOutput::Hsv(Hsv {
+        ColorKind::Value => ParseOutputContent::Hsv(Hsv {
             hue: hue_value,
             sat,
             val: lv,
         }),
-        ColorKind::Luminance => ParseOutput::Hsl(Hsl {
+        ColorKind::Luminance => ParseOutputContent::Hsl(Hsl {
             hue: hue_value,
             sat,
             lum: lv,
@@ -380,7 +419,7 @@ fn parse_hslv(input: &str, capture: &Captures) -> Result<ParseOutput, ParseError
     })
 }
 
-fn parse_hex_color(input: &str, capture: &Captures) -> Result<ParseOutput, ParseError> {
+fn parse_hex_color(input: &str, capture: &Captures) -> Result<ParseOutputContent, ParseError> {
     let error = |kind| ParseError {
         pattern: Some(Pattern::HexColor),
         kind,
@@ -412,7 +451,7 @@ fn parse_hex_color(input: &str, capture: &Captures) -> Result<ParseOutput, Parse
         _ => Err(error(ParseErrorKind::HexStringTooShort)),
     };
 
-    res.map(ParseOutput::HexColor)
+    res.map(ParseOutputContent::HexColor)
 }
 
 pub static REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -421,6 +460,14 @@ pub static REGEX: LazyLock<Regex> = LazyLock::new(|| {
 
     Regex::new_many(&patterns).expect("Failed to compile regex")
 });
+
+pub fn parse_string<'a>(
+    input: &'a str,
+) -> impl Iterator<Item = Result<ParseOutput, ParseError>> + 'a {
+    REGEX
+        .captures_iter(input)
+        .map(|x| ParseOutput::from_pattern_capture(input, &x))
+}
 
 #[cfg(test)]
 mod tests {
@@ -464,25 +511,31 @@ mod tests {
 
         let captures = REGEX
             .captures_iter(&input)
-            .map(|x| Pattern::parse_pattern_capture(&input, &x))
+            .map(|x| ParseOutput::from_pattern_capture(&input, &x))
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
 
-        let hsl = |hue, sat, lum| ParseOutput::Hsl(Hsl { hue, sat, lum });
-        let hsv = |hue, sat, val| ParseOutput::Hsv(Hsv { hue, sat, val });
+        let hsl = |span: std::ops::Range<usize>, hue, sat, lum| ParseOutput {
+            span: span.into(),
+            content: ParseOutputContent::Hsl(Hsl { hue, sat, lum }),
+        };
+        let hsv = |span: std::ops::Range<usize>, hue, sat, val| ParseOutput {
+            span: span.into(),
+            content: ParseOutputContent::Hsv(Hsv { hue, sat, val }),
+        };
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             captures,
             vec![
-                hsl(360.0, 100.0, 50.0),
-                hsv(1.0f32.to_degrees(), 100.0, 50.0),
-                hsl(270.0, 100.0, 50.0),
-                hsl(225.0, 100.0, 50.0),
-                hsl(180.0, 100.0, 50.0),
-                hsl(135.0, 100.0, 50.0),
-                hsl(90.0, 100.0, 50.0),
-                hsl(45.0, 100.0, 50.0),
-                hsl(0.0, 100.0, 50.0),
+                hsl(0..18, 360.0, 100.0, 50.0),
+                hsv(19..37, 1.0f32.to_degrees(), 100.0, 50.0),
+                hsl(38..55, 270.0, 100.0, 50.0),
+                hsl(56..73, 225.0, 100.0, 50.0),
+                hsl(74..91, 180.0, 100.0, 50.0),
+                hsl(92..109, 135.0, 100.0, 50.0),
+                hsl(110..126, 90.0, 100.0, 50.0),
+                hsl(127..143, 45.0, 100.0, 50.0),
+                hsl(144..159, 0.0, 100.0, 50.0),
             ]
         );
     }
@@ -494,9 +547,9 @@ mod tests {
             g: 0,
             b: 127,
         };
-        let hex_str = ParseOutput::HexColor(hex).to_hex_string();
+        let hex_str = ParseOutputContent::HexColor(hex).to_hex_string();
 
-        assert_eq!(hex_str, "#ff007f");
+        assert_eq!(hex_str, "ff007f");
     }
 
     #[test_case(270.0, 100.0, 100.0 => Rgb::new(255, 255, 255))]

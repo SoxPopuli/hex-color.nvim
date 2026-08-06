@@ -13,11 +13,13 @@ lto = true
 [dependencies]
 # nvim-oxi = "0.6.0"
 # mlua = { version = "0.12.0", features = ["luajit", "module"] }
-nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "7ad27a7", features = ["neovim-0-12"] }
+# nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "7ad27a7", features = ["neovim-0-12"] }
+nvim-oxi = { path = "../deps/nvim-oxi", features = ["neovim-0-12"] }
 regex-automata = "0.4.17"
 strum = { version = "0.28.0", features = ["derive"] }
 const_format = { version = "0.2.36", features = ["fmt"] }
 thiserror = "2.0.19"
 
 [dev-dependencies]
+pretty_assertions = "1.4.1"
 test-case = "3.3.1"

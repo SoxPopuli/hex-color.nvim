@@ -71,6 +71,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "diff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
+
+[[package]]
 name = "either"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -94,6 +100,7 @@ version = "0.1.0"
 dependencies = [
  "const_format",
  "nvim-oxi",
+ "pretty_assertions",
  "regex-automata",
  "strum",
  "test-case",
@@ -188,7 +195,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=7ad27a7#7ad27a7d3c8a72c34e7b9914eb77fb0644ff3f65"
 dependencies = [
  "mlua",
  "nvim-oxi-api",
@@ -201,7 +207,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi-api"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=7ad27a7#7ad27a7d3c8a72c34e7b9914eb77fb0644ff3f65"
 dependencies = [
  "mlua",
  "nvim-oxi-luajit",
@@ -215,7 +220,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi-luajit"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=7ad27a7#7ad27a7d3c8a72c34e7b9914eb77fb0644ff3f65"
 dependencies = [
  "thiserror",
 ]
@@ -223,7 +227,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi-macros"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=7ad27a7#7ad27a7d3c8a72c34e7b9914eb77fb0644ff3f65"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -233,7 +236,6 @@ dependencies = [
 [[package]]
 name = "nvim-oxi-types"
 version = "0.6.0"
-source = "git+https://github.com/noib3/nvim-oxi?rev=7ad27a7#7ad27a7d3c8a72c34e7b9914eb77fb0644ff3f65"
 dependencies = [
  "libc",
  "nvim-oxi-luajit",
@@ -269,6 +271,16 @@ name = "pkg-config"
 version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
+
+[[package]]
+name = "pretty_assertions"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
+dependencies = [
+ "diff",
+ "yansi",
+]
 
 [[package]]
 name = "proc-macro2"
@@ -498,3 +510,9 @@ name = "windows-link"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+
+[[package]]
+name = "yansi"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
