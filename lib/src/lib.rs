@@ -24,20 +24,6 @@ fn lines_to_string(lines: impl Iterator<Item = nvim_oxi::String>) -> String {
     s
 }
 
-trait ToLuaError<T>: Sized {
-    fn into_lua_error(self) -> NvimResult<T>;
-}
-impl<T> ToLuaError<T> for Result<T, color::ParseError> {
-    fn into_lua_error(self) -> NvimResult<T> {
-        match self {
-            Ok(o) => Ok(o),
-            Err(e) => Err(nvim_oxi::Error::Lua(nvim_oxi::lua::Error::RuntimeError(
-                e.to_string(),
-            ))),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct BufferColor {
     row_index: usize,
@@ -74,10 +60,14 @@ fn get_buffer_colors(buf: &Buffer) -> NvimResult<Vec<BufferColor>> {
 static NVIM_NAMESPACE: LazyLock<u32> =
     LazyLock::new(|| nvim_oxi::api::create_namespace(env!("CARGO_CRATE_NAME")));
 
-fn highlight_hex_strings(bufnr: Option<i32>) -> NvimResult<()> {
-    let mut buf = bufnr
+fn unwrap_or_current(bufnr: Option<i32>) -> Buffer {
+    bufnr
         .map(Buffer::from)
-        .unwrap_or_else(nvim_oxi::api::get_current_buf);
+        .unwrap_or_else(nvim_oxi::api::get_current_buf)
+}
+
+fn highlight_hex_strings(bufnr: Option<i32>) -> NvimResult<()> {
+    let mut buf = unwrap_or_current(bufnr);
 
     let colors = get_buffer_colors(&buf)?;
 
@@ -112,10 +102,21 @@ fn highlight_hex_strings(bufnr: Option<i32>) -> NvimResult<()> {
     Ok(())
 }
 
+fn clear_highlights(bufnr: Option<i32>) -> NvimResult<()> {
+    let mut buf = unwrap_or_current(bufnr);
+    buf.clear_namespace(*NVIM_NAMESPACE, ..)?;
+    Ok(())
+}
+
 #[nvim_oxi::plugin]
 fn hex_color_rs() -> Dictionary {
     let highlight_hex_strings: Function<Option<i32>, NvimResult<()>> =
         Function::from_fn(highlight_hex_strings);
+    let clear_highlights: Function<Option<i32>, NvimResult<()>> =
+        Function::from_fn(clear_highlights);
 
-    Dictionary::from_iter([("highlight_hex_strings", highlight_hex_strings)])
+    Dictionary::from_iter([
+        ("highlight_hex_strings", highlight_hex_strings),
+        ("clear_highlights", clear_highlights),
+    ])
 }
