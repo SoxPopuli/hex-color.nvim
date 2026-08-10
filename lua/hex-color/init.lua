@@ -33,4 +33,15 @@ function M.disable()
 	lib.clear_highlights(buf)
 end
 
+vim.api.nvim_create_user_command("HexColorEnable", function()
+	M.enable()
+end, {})
+vim.api.nvim_create_user_command("HexColorDisable", function()
+	M.disable()
+end, {})
+vim.api.nvim_create_user_command("HexColorRefresh", function()
+	M.clear_highlights()
+	M.highlight_hex_strings()
+end, {})
+
 return M
