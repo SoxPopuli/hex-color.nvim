@@ -40,8 +40,10 @@ vim.api.nvim_create_user_command("HexColorDisable", function()
 	M.disable()
 end, {})
 vim.api.nvim_create_user_command("HexColorRefresh", function()
-	M.clear_highlights()
-	M.highlight_hex_strings()
+	if autocmd_id ~= nil then
+		M.clear_highlights()
+		M.highlight_hex_strings()
+	end
 end, {})
 
 return M
