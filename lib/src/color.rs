@@ -1,5 +1,5 @@
 use const_format::formatc;
-use regex_automata::{Span, meta::Regex, util::captures::Captures};
+use regex_automata::{meta::Regex, util::captures::Captures};
 use std::{range::Range, sync::LazyLock};
 use strum::{EnumCount, EnumIter, VariantArray};
 use thiserror::Error;
@@ -128,6 +128,7 @@ impl<T> From<(T, T, T)> for Rgb<T> {
     }
 }
 impl<T> Rgb<T> {
+    #[cfg(test)]
     pub fn new(r: T, g: T, b: T) -> Self {
         Self { r, g, b }
     }
@@ -224,6 +225,7 @@ impl ParseOutputContent {
         }
     }
 
+    #[cfg(test)]
     pub fn to_hex_string(&self) -> String {
         self.to_rgb().to_hex_string()
     }

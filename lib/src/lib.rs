@@ -1,4 +1,6 @@
 mod color;
+
+use crate::color::Rgb;
 use nvim_oxi::{
     Dictionary, Function, Result as NvimResult,
     api::{
@@ -7,22 +9,6 @@ use nvim_oxi::{
     },
 };
 use std::{range::Range, sync::LazyLock};
-
-use crate::color::Rgb;
-
-fn lines_to_string(lines: impl Iterator<Item = nvim_oxi::String>) -> String {
-    let mut s = String::new();
-    let mut first = true;
-    for l in lines {
-        if !first {
-            s.push('\n');
-        }
-        s.push_str(&l.to_string_lossy());
-        first = false;
-    }
-
-    s
-}
 
 #[derive(Debug)]
 pub struct BufferColor {
