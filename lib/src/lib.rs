@@ -1,6 +1,7 @@
 mod color;
 
 use crate::color::Rgb;
+use arrayvec::ArrayString;
 use nvim_oxi::{
     Dictionary, Function, Result as NvimResult,
     api::{
@@ -52,6 +53,17 @@ fn unwrap_or_current(bufnr: Option<i32>) -> Buffer {
         .unwrap_or_else(nvim_oxi::api::get_current_buf)
 }
 
+fn hex_hash_prefixed(x: &Rgb<u8>) -> ArrayString<7> {
+    let mut output = ArrayString::new_const();
+
+    let suffix = x.to_hex_string();
+
+    output.push('#');
+    output.push_str(&suffix);
+
+    output
+}
+
 fn highlight_hex_strings(bufnr: Option<i32>) -> NvimResult<()> {
     let mut buf = unwrap_or_current(bufnr);
 
@@ -61,8 +73,8 @@ fn highlight_hex_strings(bufnr: Option<i32>) -> NvimResult<()> {
         let hex_color = c.color.to_hex_string();
         let hl_group = format!("HexColor_{hex_color}");
 
-        let bg = format!("#{hex_color}");
-        let fg = format!("#{}", c.color.get_foreground_color().to_hex_string());
+        let bg = hex_hash_prefixed(&c.color);
+        let fg = hex_hash_prefixed(&c.color.get_foreground_color());
 
         let hl_opts = SetHighlightOpts::builder()
             .bg(&bg)

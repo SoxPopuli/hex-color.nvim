@@ -1,3 +1,4 @@
+use arrayvec::ArrayString;
 use const_format::formatc;
 use regex_automata::{meta::Regex, util::captures::Captures};
 use std::{range::Range, sync::LazyLock};
@@ -159,20 +160,20 @@ impl Rgb<u8> {
 
     /// Doesn't include the '#'
     /// e.g. `0xFF00FF` -> `"ff00ff"`
-    pub fn to_hex_string(&self) -> String {
-        let mut output = Vec::with_capacity(6);
+    pub fn to_hex_string(&self) -> ArrayString<6> {
+        let mut output = ArrayString::new_const();
 
         let mut add_chars = |hex| {
             let [a, b] = int_to_hex_char(hex);
-            output.push(a as u8);
-            output.push(b as u8);
+            output.push(a);
+            output.push(b);
         };
 
         add_chars(self.r);
         add_chars(self.g);
         add_chars(self.b);
 
-        String::from_utf8(output).expect("output is valid utf-8")
+        output
     }
 }
 
@@ -226,7 +227,7 @@ impl ParseOutputContent {
     }
 
     #[cfg(test)]
-    pub fn to_hex_string(&self) -> String {
+    pub fn to_hex_string(&self) -> ArrayString<6> {
         self.to_rgb().to_hex_string()
     }
 }
@@ -549,7 +550,9 @@ mod tests {
             g: 0,
             b: 127,
         };
-        let hex_str = ParseOutputContent::HexColor(hex).to_hex_string();
+        let hex_str = ParseOutputContent::HexColor(hex)
+            .to_hex_string()
+            .to_string();
 
         assert_eq!(hex_str, "ff007f");
     }
