@@ -4,6 +4,12 @@ local M = {}
 
 local autocmd_id = nil
 
+---@type fun(): nil
+M.highlight_hex_strings = lib.highlight_hex_strings
+
+---@type fun(): nil
+M.clear_highlights = lib.clear_highlights
+
 function M.enable()
 	autocmd_id = vim.api.nvim_create_autocmd({ "BufEnter", "BufRead", "TextChanged", "InsertLeave" }, {
 		pattern = "*",
