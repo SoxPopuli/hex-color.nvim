@@ -11,14 +11,14 @@ strip = true
 lto = true
 
 [dependencies]
-# nvim-oxi = { git = "https://github.com/noib3/nvim-oxi", rev = "7ad27a7", features = ["neovim-0-12"] }
-nvim-oxi = { git = "https://github.com/SoxPopuli/nvim-oxi.git", branch = "hl_fix", features = ["neovim-0-12"] }
 regex-automata = "0.4.17"
 strum = { version = "0.28.0", features = ["derive"] }
 const_format = { version = "0.2.36", features = ["fmt"] }
 thiserror = "2.0.19"
-arrayvec = "0.7.8"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
 test-case = "3.3.1"
+
+[build-dependencies]
+cbindgen = "0.29.4"

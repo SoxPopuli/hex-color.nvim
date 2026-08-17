@@ -1,4 +1,3 @@
-use arrayvec::ArrayString;
 use const_format::formatc;
 use regex_automata::{meta::Regex, util::captures::Captures};
 use std::{range::Range, sync::LazyLock};
@@ -117,6 +116,53 @@ pub fn hue_to_rgb_prime(hue: f32, chroma: f32) -> Rgb<f32> {
     .into()
 }
 
+/// Fixed size RGB hex string
+///
+/// Doesn't include the '#'
+/// e.g. `0xFF00FF` -> `"ff00ff"`
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct RgbString(pub(crate) [u8; 6]);
+impl RgbString {
+    pub fn new(Rgb { r, g, b }: &Rgb<u8>) -> Self {
+        let mut output = Self::default();
+
+        let mut i = 0;
+        let mut add_chars = |hex| {
+            let [a, b] = int_to_hex_char(hex);
+            output.0[i] = a as u8;
+            output.0[i + 1] = b as u8;
+
+            i += 2;
+        };
+
+        add_chars(*r);
+        add_chars(*g);
+        add_chars(*b);
+
+        output
+    }
+
+    pub fn as_str(&self) -> &str {
+        unsafe { std::str::from_utf8_unchecked(self.0.as_slice()) }
+    }
+}
+impl std::ops::Deref for RgbString {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+impl std::cmp::PartialEq<str> for RgbString {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other.as_bytes()
+    }
+}
+impl std::fmt::Display for RgbString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Default, PartialEq)]
 pub struct Rgb<T> {
     r: T,
@@ -160,20 +206,8 @@ impl Rgb<u8> {
 
     /// Doesn't include the '#'
     /// e.g. `0xFF00FF` -> `"ff00ff"`
-    pub fn to_hex_string(&self) -> ArrayString<6> {
-        let mut output = ArrayString::new_const();
-
-        let mut add_chars = |hex| {
-            let [a, b] = int_to_hex_char(hex);
-            output.push(a);
-            output.push(b);
-        };
-
-        add_chars(self.r);
-        add_chars(self.g);
-        add_chars(self.b);
-
-        output
+    pub fn to_hex_string(&self) -> RgbString {
+        RgbString::new(self)
     }
 }
 
@@ -225,11 +259,6 @@ impl ParseOutputContent {
             Self::Hsv(hsv) => hsv_to_rgb(hsv),
         }
     }
-
-    #[cfg(test)]
-    pub fn to_hex_string(&self) -> ArrayString<6> {
-        self.to_rgb().to_hex_string()
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -270,13 +299,8 @@ impl ParseOutput {
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("{kind:?} error for pattern {pattern:?}")]
 pub struct ParseError {
-    pattern: Option<Pattern>,
-    kind: ParseErrorKind,
-}
-impl From<ParseError> for nvim_oxi::Error {
-    fn from(val: ParseError) -> Self {
-        nvim_oxi::Error::Lua(nvim_oxi::lua::Error::RuntimeError(val.to_string()))
-    }
+    pub pattern: Option<Pattern>,
+    pub kind: ParseErrorKind,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -331,7 +355,7 @@ pub enum Pattern {
     Hslv,
 }
 impl Pattern {
-    pub fn to_regex_str(&self) -> &'static str {
+    pub const fn to_regex_str(&self) -> &'static str {
         match self {
             Self::HexColor => r"#\b([[:xdigit:]]{8}|[[:xdigit:]]{6})\b",
             Self::Hslv => {
@@ -551,6 +575,7 @@ mod tests {
             b: 127,
         };
         let hex_str = ParseOutputContent::HexColor(hex)
+            .to_rgb()
             .to_hex_string()
             .to_string();
 

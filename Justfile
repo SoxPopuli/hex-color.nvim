@@ -18,12 +18,14 @@ test-release:
 test:
     cargo nextest run
 
+[working-directory: 'lib']
+clean:
+    cargo clean
+
 rust_output_dir := 'lib/target'
 debug_dir := rust_output_dir / 'debug'
 release_dir := rust_output_dir / 'release'
-output_dir := 'lua'
-output_name := 'hex_color_rs.so'
-output := output_dir / output_name
+output := 'hex_color_rs.so'
 
 [linux]
 _deploy dir:
@@ -37,6 +39,6 @@ _deploy dir:
 _deploy dir:
     copy {{dir / 'hex_color_rs.dll'}} {{output}}
 
-deploy-debug: test build (_deploy debug_dir)
+deploy-debug: build (_deploy debug_dir)
 
-deploy: test-release build-release (_deploy release_dir)
+deploy: build-release (_deploy release_dir) 
